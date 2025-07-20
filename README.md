@@ -59,6 +59,9 @@ cargo run -- genetic --num-squares 8 --generations 200 --rotation --record-anima
 # Generate MP4 video from animation data
 cargo run -- animate -i ga_demo -o genetic_demo.mp4 --fps 24 --interpolate
 
+# Record AND generate video
+cargo run -- genetic --num-squares 8 --generations 200 --rotation --record-animation ga_demo --frame-interval 10 --generate-video genetic_demo.mp4 --video-fps 24 --video-interpolate --visualize
+
 # Export frames for custom editing
 cargo run -- render-animation -i sa_demo -o sa_frames --fps 30 --interpolate
 ```

@@ -143,7 +143,7 @@ pub struct GeneticSolver {
 
 impl GeneticSolver {
     pub fn new(num_squares: usize, square_size: f64, allow_rotation: bool) -> Self {
-        let population_size = (num_squares * 10).max(50).min(200);
+        let population_size = (num_squares * 8).max(30).min(150); // Smaller, more achievable population
         let elitism_count = population_size / 10;
 
         Self {
@@ -283,17 +283,17 @@ impl GeneticSolver {
                 );
             }
 
-            // Early termination if no improvement
-            if generation > 100
-                && self.best_fitness_history.len() > 50
+            // Early termination if no improvement (stricter convergence)
+            if generation > 150
+                && self.best_fitness_history.len() > 75
                 && self
                     .best_fitness_history
                     .iter()
                     .rev()
-                    .take(50)
-                    .all(|&f| (f - best_fitness).abs() < 1.0)
+                    .take(75)
+                    .all(|&f| (f - best_fitness).abs() < 0.01)
             {
-                println!("Converged at generation {}", generation);
+                println!("Converged at generation {} (strict threshold)", generation);
                 break;
             }
         }
@@ -316,7 +316,7 @@ impl GeneticSolver {
 
         let theoretical_min = (self.num_squares as f64).sqrt() * self.square_size;
         let container_sizes: Vec<f64> = (0..self.population_size)
-            .map(|i| theoretical_min * (1.2 + (i as f64 / self.population_size as f64) * 0.5))
+            .map(|i| theoretical_min * (1.5 + (i as f64 / self.population_size as f64) * 0.8)) // More generous containers
             .collect();
 
         // Generate individuals in parallel
@@ -328,9 +328,11 @@ impl GeneticSolver {
             })
             .collect();
 
-        if individuals.len() < self.population_size / 2 {
-            return Err("Failed to generate sufficient initial population".into());
+        if individuals.is_empty() {
+            return Err("Failed to generate any valid initial population".into());
         }
+        
+        println!("Generated {} individuals out of {} target", individuals.len(), self.population_size);
 
         self.population = individuals;
         self.population
@@ -385,7 +387,12 @@ impl GeneticSolver {
                         } else {
                             rng.gen::<f64>() * (container_size - self.square_size)
                         };
-                        (x, y, 0.0)
+                        let angle = if self.allow_rotation {
+                            rng.gen::<f64>() * PI / 2.0
+                        } else {
+                            0.0
+                        };
+                        (x, y, angle)
                     }
                     2 => {
                         // Grid-like placement with noise
@@ -401,7 +408,12 @@ impl GeneticSolver {
                         let y = (grid_y as f64 * cell_size + rng.gen_range(-noise..noise))
                             .max(0.0)
                             .min(container_size - self.square_size);
-                        (x, y, 0.0)
+                        let angle = if self.allow_rotation {
+                            rng.gen::<f64>() * PI / 2.0
+                        } else {
+                            0.0
+                        };
+                        (x, y, angle)
                     }
                     _ => {
                         // Corner-first placement
@@ -417,11 +429,21 @@ impl GeneticSolver {
 
                         if squares.len() < 4 {
                             let (x, y) = corners[squares.len()];
-                            (x, y, 0.0)
+                            let angle = if self.allow_rotation {
+                                rng.gen::<f64>() * PI / 2.0
+                            } else {
+                                0.0
+                            };
+                            (x, y, angle)
                         } else {
                             let x = rng.gen::<f64>() * (container_size - self.square_size);
                             let y = rng.gen::<f64>() * (container_size - self.square_size);
-                            (x, y, 0.0)
+                            let angle = if self.allow_rotation {
+                                rng.gen::<f64>() * PI / 2.0
+                            } else {
+                                0.0
+                            };
+                            (x, y, angle)
                         }
                     }
                 };
@@ -590,58 +612,63 @@ impl GeneticSolver {
     fn mutate(&self, individual: &mut Individual) {
         let mut rng = thread_rng();
 
-        match rng.gen_range(0..4) {
-            0 => {
-                // Position mutation
-                if !individual.squares.is_empty() {
-                    let idx = rng.gen_range(0..individual.squares.len());
-                    let square = &mut individual.squares[idx];
+        // Choose mutation type with different probabilities
+        let mutation_choice = rng.gen::<f64>();
+        
+        if mutation_choice < 0.4 {
+            // Position mutation (40% chance)
+            if !individual.squares.is_empty() {
+                let idx = rng.gen_range(0..individual.squares.len());
+                let square = &mut individual.squares[idx];
 
-                    let max_delta = individual.container_size * 0.1;
-                    let dx = rng.gen_range(-max_delta..max_delta);
-                    let dy = rng.gen_range(-max_delta..max_delta);
+                let max_delta = individual.container_size * 0.15; // Slightly larger moves
+                let dx = rng.gen_range(-max_delta..max_delta);
+                let dy = rng.gen_range(-max_delta..max_delta);
 
-                    square.x = (square.x + dx)
-                        .max(0.0)
-                        .min(individual.container_size - self.square_size);
-                    square.y = (square.y + dy)
-                        .max(0.0)
-                        .min(individual.container_size - self.square_size);
-                }
+                square.x = (square.x + dx)
+                    .max(0.0)
+                    .min(individual.container_size - self.square_size);
+                square.y = (square.y + dy)
+                    .max(0.0)
+                    .min(individual.container_size - self.square_size);
             }
-            1 => {
-                // Angle mutation
-                if self.allow_rotation && !individual.squares.is_empty() {
-                    let idx = rng.gen_range(0..individual.squares.len());
-                    let square = &mut individual.squares[idx];
+        } else if mutation_choice < 0.7 && self.allow_rotation {
+            // Angle mutation (30% chance when rotation is enabled)
+            if !individual.squares.is_empty() {
+                let idx = rng.gen_range(0..individual.squares.len());
+                let square = &mut individual.squares[idx];
 
-                    let angle_delta = rng.gen_range(-PI / 8.0..PI / 8.0);
+                // More aggressive angle mutations
+                if rng.gen_bool(0.3) {
+                    // Complete rotation change (30% of angle mutations)
+                    square.angle = rng.gen::<f64>() * PI / 2.0;
+                } else {
+                    // Small adjustment (70% of angle mutations)
+                    let angle_delta = rng.gen_range(-PI / 6.0..PI / 6.0);
                     square.angle = (square.angle + angle_delta) % (PI / 2.0);
                 }
             }
-            2 => {
-                // Swap mutation
-                if individual.squares.len() >= 2 {
-                    let idx1 = rng.gen_range(0..individual.squares.len());
-                    let idx2 = rng.gen_range(0..individual.squares.len());
+        } else if mutation_choice < 0.9 {
+            // Swap mutation (15% chance)
+            if individual.squares.len() >= 2 {
+                let idx1 = rng.gen_range(0..individual.squares.len());
+                let idx2 = rng.gen_range(0..individual.squares.len());
 
-                    if idx1 != idx2 {
-                        let pos1 = (individual.squares[idx1].x, individual.squares[idx1].y);
-                        let pos2 = (individual.squares[idx2].x, individual.squares[idx2].y);
+                if idx1 != idx2 {
+                    let pos1 = (individual.squares[idx1].x, individual.squares[idx1].y);
+                    let pos2 = (individual.squares[idx2].x, individual.squares[idx2].y);
 
-                        individual.squares[idx1].x = pos2.0;
-                        individual.squares[idx1].y = pos2.1;
-                        individual.squares[idx2].x = pos1.0;
-                        individual.squares[idx2].y = pos1.1;
-                    }
+                    individual.squares[idx1].x = pos2.0;
+                    individual.squares[idx1].y = pos2.1;
+                    individual.squares[idx2].x = pos1.0;
+                    individual.squares[idx2].y = pos1.1;
                 }
             }
-            _ => {
-                // Container size mutation
-                let delta = rng.gen_range(-0.1..0.1);
-                individual.container_size = (individual.container_size * (1.0 + delta))
-                    .max(self.square_size * (self.num_squares as f64).sqrt());
-            }
+        } else {
+            // Container size mutation (10% chance)
+            let delta = rng.gen_range(-0.05..0.05); // Smaller container changes
+            individual.container_size = (individual.container_size * (1.0 + delta))
+                .max(self.square_size * (self.num_squares as f64).sqrt());
         }
 
         // Recalculate fitness

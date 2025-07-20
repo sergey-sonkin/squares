@@ -53,6 +53,18 @@ enum Commands {
         /// Animation frame recording interval
         #[arg(long, default_value = "100")]
         frame_interval: usize,
+
+        /// Generate video directly after solving
+        #[arg(long)]
+        generate_video: Option<String>,
+
+        /// Video frame rate for direct generation
+        #[arg(long, default_value = "24")]
+        video_fps: f64,
+
+        /// Enable interpolation for direct video generation
+        #[arg(long)]
+        video_interpolate: bool,
     },
 
     /// Solve square packing using genetic algorithm
@@ -80,6 +92,18 @@ enum Commands {
         /// Animation frame recording interval
         #[arg(long, default_value = "10")]
         frame_interval: usize,
+
+        /// Generate video directly after solving
+        #[arg(long)]
+        generate_video: Option<String>,
+
+        /// Video frame rate for direct generation
+        #[arg(long, default_value = "24")]
+        video_fps: f64,
+
+        /// Enable interpolation for direct video generation
+        #[arg(long)]
+        video_interpolate: bool,
     },
 
     /// Test against known optimal solutions
@@ -189,6 +213,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             rotation,
             record_animation,
             frame_interval,
+            generate_video,
+            video_fps,
+            video_interpolate,
         } => {
             println!("Solving {} squares packing problem...", num_squares);
             let start = Instant::now();
@@ -224,10 +251,53 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
 
             // Save animation data if requested
-            if let Some(animation_file) = record_animation {
+            if let Some(animation_file) = record_animation.clone() {
                 let output_path = output_manager.animation_json_path(&animation_file);
                 solver.save_animation_data(&output_path)?;
                 println!("Animation data saved to: {}", output_path.display());
+            }
+
+            // Generate video directly if requested
+            if let Some(video_filename) = generate_video {
+                if let Some(animation_file) = record_animation {
+                    // Check if FFmpeg is available
+                    if !detect_ffmpeg() {
+                        println!("Warning: FFmpeg not found. Skipping video generation.");
+                        println!("You can install FFmpeg and run: cargo run -- animate -i {} -o {}", animation_file, video_filename);
+                    } else {
+                        println!("Generating video from animation data...");
+                        
+                        let input_path = output_manager.animation_json_path(&animation_file);
+                        let animation_data = AnimationRecorder::load_from_file(&input_path)?;
+                        
+                        let final_output_path = output_manager.get_output_path(&video_filename);
+                        let extension = final_output_path
+                            .extension()
+                            .and_then(|ext| ext.to_str())
+                            .unwrap_or("mp4");
+                        
+                        let format = VideoFormat::from_extension(extension).unwrap_or(VideoFormat::Mp4);
+                        let config = VideoGeneratorConfig {
+                            width: 800,
+                            height: 600,
+                            fps: video_fps,
+                            format,
+                            interpolate: video_interpolate,
+                            quality: VideoQuality::Medium,
+                        };
+                        
+                        let generator = VideoGenerator::new(config);
+                        generator.generate_video(&animation_data, &final_output_path)?;
+                        
+                        println!("Video generated: {}", final_output_path.display());
+                        if let Ok(metadata) = std::fs::metadata(&final_output_path) {
+                            let size_mb = metadata.len() as f64 / (1024.0 * 1024.0);
+                            println!("File size: {:.2} MB", size_mb);
+                        }
+                    }
+                } else {
+                    println!("Warning: --generate-video requires --record-animation to be specified");
+                }
             }
 
             // Show iteration history
@@ -241,6 +311,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             rotation,
             record_animation,
             frame_interval,
+            generate_video,
+            video_fps,
+            video_interpolate,
         } => {
             println!(
                 "Solving {} squares packing problem using genetic algorithm...",
@@ -279,10 +352,53 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
 
             // Save animation data if requested
-            if let Some(animation_file) = record_animation {
+            if let Some(animation_file) = record_animation.clone() {
                 let output_path = output_manager.animation_json_path(&animation_file);
                 genetic_solver.save_animation_data(&output_path)?;
                 println!("Animation data saved to: {}", output_path.display());
+            }
+
+            // Generate video directly if requested
+            if let Some(video_filename) = generate_video {
+                if let Some(animation_file) = record_animation {
+                    // Check if FFmpeg is available
+                    if !detect_ffmpeg() {
+                        println!("Warning: FFmpeg not found. Skipping video generation.");
+                        println!("You can install FFmpeg and run: cargo run -- animate -i {} -o {}", animation_file, video_filename);
+                    } else {
+                        println!("Generating video from animation data...");
+                        
+                        let input_path = output_manager.animation_json_path(&animation_file);
+                        let animation_data = AnimationRecorder::load_from_file(&input_path)?;
+                        
+                        let final_output_path = output_manager.get_output_path(&video_filename);
+                        let extension = final_output_path
+                            .extension()
+                            .and_then(|ext| ext.to_str())
+                            .unwrap_or("mp4");
+                        
+                        let format = VideoFormat::from_extension(extension).unwrap_or(VideoFormat::Mp4);
+                        let config = VideoGeneratorConfig {
+                            width: 800,
+                            height: 600,
+                            fps: video_fps,
+                            format,
+                            interpolate: video_interpolate,
+                            quality: VideoQuality::Medium,
+                        };
+                        
+                        let generator = VideoGenerator::new(config);
+                        generator.generate_video(&animation_data, &final_output_path)?;
+                        
+                        println!("Video generated: {}", final_output_path.display());
+                        if let Ok(metadata) = std::fs::metadata(&final_output_path) {
+                            let size_mb = metadata.len() as f64 / (1024.0 * 1024.0);
+                            println!("File size: {:.2} MB", size_mb);
+                        }
+                    }
+                } else {
+                    println!("Warning: --generate-video requires --record-animation to be specified");
+                }
             }
 
             // Show genetic algorithm statistics
