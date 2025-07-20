@@ -226,7 +226,7 @@ impl SquarePackingSolver {
             .filter(|(i, _)| *i != idx)
             .map(|(_, s)| *s)
             .collect();
-        
+
         if !self.is_valid_placement(&solution[idx], &other_squares, container_size) {
             // Revert if invalid
             solution[idx].x = old_x;
@@ -251,7 +251,7 @@ impl SquarePackingSolver {
             .filter(|(i, _)| *i != idx)
             .map(|(_, s)| *s)
             .collect();
-        
+
         if !self.is_valid_placement(&solution[idx], &other_squares, container_size) {
             solution[idx].angle = old_angle;
         }
@@ -401,4 +401,3 @@ impl SquarePackingSolver {
         }
     }
 }
-
