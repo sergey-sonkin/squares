@@ -599,7 +599,7 @@ fn animate_command(
 }
 
 fn test_known_solutions(max_squares: usize) -> Result<(), Box<dyn std::error::Error>> {
-    let known_solutions = vec![
+    let known_solutions = [
         (2, 2.0),
         (3, 2.0),
         (4, 2.0),
@@ -608,7 +608,8 @@ fn test_known_solutions(max_squares: usize) -> Result<(), Box<dyn std::error::Er
         (7, 3.0),
         (8, 3.0),
         (9, 3.0),
-        (10, 3.162),
+        (10, 3.707),
+        (12, 4),
         (17, 4.675),
     ];
 

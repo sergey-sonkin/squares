@@ -143,7 +143,7 @@ pub struct GeneticSolver {
 
 impl GeneticSolver {
     pub fn new(num_squares: usize, square_size: f64, allow_rotation: bool) -> Self {
-        let population_size = (num_squares * 8).max(30).min(150); // Smaller, more achievable population
+        let population_size = (num_squares * 8).clamp(30, 150); // Smaller, more achievable population
         let elitism_count = population_size / 10;
 
         Self {
@@ -545,7 +545,7 @@ impl GeneticSolver {
 
         // Adaptive mutation rate based on generation and diversity
         let diversity = self.calculate_diversity();
-        let exploration_factor = ((200.0 - self.generation as f64) / 200.0).max(0.1).min(1.0);
+        let exploration_factor = ((200.0 - self.generation as f64) / 200.0).clamp(0.1, 1.0);
 
         // Start with high mutation rate, decrease over time
         let base_mutation_rate = 0.05 + 0.25 * exploration_factor; // 5% to 30%
@@ -664,9 +664,8 @@ impl GeneticSolver {
 
         // Adaptive mutation: start aggressive, become refined
         let max_generations = 200.0; // Assume reasonable max
-        let exploration_factor = ((max_generations - generation as f64) / max_generations)
-            .max(0.1) // Never go below 10% exploration
-            .min(1.0);
+        let exploration_factor =
+            ((max_generations - generation as f64) / max_generations).clamp(0.1, 1.0);
 
         // Choose mutation type with different probabilities
         let mutation_choice = rng.gen::<f64>();

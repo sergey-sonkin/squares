@@ -58,7 +58,7 @@ impl AnimationRenderer {
         let chart_area = root.margin(20, 20, 20, 100);
         let mut chart = ChartBuilder::on(&chart_area)
             .caption(
-                &format!(
+                format!(
                     "Iteration {}: Container Size {:.3}",
                     frame.iteration, container_size
                 ),
@@ -110,7 +110,7 @@ impl AnimationRenderer {
         let chart_area = root.margin(20, 20, 20, 100);
         let mut chart = ChartBuilder::on(&chart_area)
             .caption(
-                &format!(
+                format!(
                     "Time {:.3}s: Container Size {:.3}",
                     frame.timestamp, container_size
                 ),
