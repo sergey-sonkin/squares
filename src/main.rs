@@ -2,11 +2,14 @@ use clap::{Parser, Subcommand};
 use std::time::Instant;
 
 mod animation;
+mod animation_renderer;
 mod genetic;
 mod geometry;
 mod solver;
 mod visualization;
 
+use animation::*;
+use animation_renderer::*;
 use genetic::*;
 use solver::*;
 use visualization::*;
@@ -107,6 +110,33 @@ enum Commands {
         #[arg(short, long)]
         rotation: bool,
     },
+
+    /// Render animation from recorded data
+    RenderAnimation {
+        /// Path to animation data file
+        #[arg(short, long)]
+        input: String,
+
+        /// Output directory for frames
+        #[arg(short, long, default_value = "animation_frames")]
+        output_dir: String,
+
+        /// Target frames per second
+        #[arg(long, default_value = "30")]
+        fps: f64,
+
+        /// Frame width in pixels
+        #[arg(long, default_value = "800")]
+        width: u32,
+
+        /// Frame height in pixels
+        #[arg(long, default_value = "600")]
+        height: u32,
+
+        /// Enable interpolation between frames
+        #[arg(long)]
+        interpolate: bool,
+    },
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -173,8 +203,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             generations,
             visualize,
             rotation,
-            record_animation,
-            frame_interval,
+            record_animation: _,
+            frame_interval: _,
         } => {
             println!(
                 "Solving {} squares packing problem using genetic algorithm...",
@@ -227,8 +257,56 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         } => {
             compare_algorithms(num_squares, runs, rotation)?;
         }
+
+        Commands::RenderAnimation {
+            input,
+            output_dir,
+            fps,
+            width,
+            height,
+            interpolate,
+        } => {
+            render_animation_command(input, output_dir, fps, width, height, interpolate)?;
+        }
     }
 
+    Ok(())
+}
+
+fn render_animation_command(
+    input_path: String,
+    output_dir: String,
+    fps: f64,
+    width: u32,
+    height: u32,
+    interpolate: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    println!("Loading animation data from {}...", input_path);
+    
+    let animation_data = AnimationRecorder::load_from_file(&input_path)?;
+    
+    println!("Animation info:");
+    println!("  Algorithm: {}", animation_data.algorithm_name);
+    println!("  Problem size: {} squares", animation_data.problem_size);
+    println!("  Total frames: {}", animation_data.frames.len());
+    println!("  Duration: {:.2}s", animation_data.metadata.total_duration);
+    
+    let renderer = AnimationSequenceRenderer::new(width, height, fps, interpolate);
+    
+    println!("Rendering animation frames to {}...", output_dir);
+    let frame_files = renderer.render_animation_sequence(&animation_data, &output_dir)?;
+    
+    println!("Successfully rendered {} frames", frame_files.len());
+    println!("Output directory: {}", output_dir);
+    
+    if interpolate {
+        println!("Interpolated to {:.1} FPS", fps);
+        println!("Total output frames: {}", frame_files.len());
+    }
+    
+    println!("\nTo create a video, you can use ffmpeg:");
+    println!("  ffmpeg -framerate {} -i {}/frame_%06d.png -c:v libx264 -r 30 -pix_fmt yuv420p output.mp4", fps, output_dir);
+    
     Ok(())
 }
 
