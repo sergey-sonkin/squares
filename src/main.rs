@@ -6,12 +6,14 @@ mod animation_renderer;
 mod genetic;
 mod geometry;
 mod solver;
+mod video_generator;
 mod visualization;
 
 use animation::*;
 use animation_renderer::*;
 use genetic::*;
 use solver::*;
+use video_generator::*;
 use visualization::*;
 
 #[derive(Parser)]
@@ -136,6 +138,37 @@ enum Commands {
         /// Enable interpolation between frames
         #[arg(long)]
         interpolate: bool,
+    },
+
+    /// Generate video animation from recorded data
+    Animate {
+        /// Path to animation data file
+        #[arg(short, long)]
+        input: String,
+
+        /// Output video file path
+        #[arg(short, long)]
+        output: String,
+
+        /// Target frames per second
+        #[arg(long, default_value = "30")]
+        fps: f64,
+
+        /// Video width in pixels
+        #[arg(long, default_value = "800")]
+        width: u32,
+
+        /// Video height in pixels
+        #[arg(long, default_value = "600")]
+        height: u32,
+
+        /// Enable interpolation between frames
+        #[arg(long)]
+        interpolate: bool,
+
+        /// Video quality (low, medium, high)
+        #[arg(long, default_value = "medium")]
+        quality: String,
     },
 }
 
@@ -268,6 +301,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         } => {
             render_animation_command(input, output_dir, fps, width, height, interpolate)?;
         }
+
+        Commands::Animate {
+            input,
+            output,
+            fps,
+            width,
+            height,
+            interpolate,
+            quality,
+        } => {
+            animate_command(input, output, fps, width, height, interpolate, quality)?;
+        }
     }
 
     Ok(())
@@ -307,6 +352,81 @@ fn render_animation_command(
     println!("\nTo create a video, you can use ffmpeg:");
     println!("  ffmpeg -framerate {} -i {}/frame_%06d.png -c:v libx264 -r 30 -pix_fmt yuv420p output.mp4", fps, output_dir);
     
+    Ok(())
+}
+
+fn animate_command(
+    input_path: String,
+    output_path: String,
+    fps: f64,
+    width: u32,
+    height: u32,
+    interpolate: bool,
+    quality: String,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Check if FFmpeg is available
+    if !detect_ffmpeg() {
+        return Err("FFmpeg not found. Please install FFmpeg to generate videos.".into());
+    }
+
+    println!("Loading animation data from {}...", input_path);
+    let animation_data = AnimationRecorder::load_from_file(&input_path)?;
+    
+    println!("Animation info:");
+    println!("  Algorithm: {}", animation_data.algorithm_name);
+    println!("  Problem size: {} squares", animation_data.problem_size);
+    println!("  Total frames: {}", animation_data.frames.len());
+    println!("  Duration: {:.2}s", animation_data.metadata.total_duration);
+
+    // Determine video format from output extension
+    let output_path_obj = std::path::Path::new(&output_path);
+    let extension = output_path_obj
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .unwrap_or("mp4");
+    
+    let format = VideoFormat::from_extension(extension)
+        .unwrap_or(VideoFormat::Mp4);
+
+    // Parse quality setting
+    let video_quality = match quality.to_lowercase().as_str() {
+        "low" => VideoQuality::Low,
+        "medium" => VideoQuality::Medium,
+        "high" => VideoQuality::High,
+        _ => {
+            println!("Warning: Unknown quality '{}', using medium", quality);
+            VideoQuality::Medium
+        }
+    };
+
+    // Create video generator config
+    let config = VideoGeneratorConfig {
+        width,
+        height,
+        fps,
+        format,
+        interpolate,
+        quality: video_quality,
+    };
+
+    // Estimate output size
+    let generator = VideoGenerator::new(config);
+    let size_estimate = generator.estimate_output_size(&animation_data)?;
+    println!("{}", size_estimate);
+
+    // Generate video
+    println!("Generating {} video...", extension.to_uppercase());
+    generator.generate_video(&animation_data, &output_path)?;
+    
+    println!("Video generation complete!");
+    println!("Output file: {}", output_path);
+    
+    // Display file size
+    if let Ok(metadata) = std::fs::metadata(&output_path) {
+        let size_mb = metadata.len() as f64 / (1024.0 * 1024.0);
+        println!("File size: {:.2} MB", size_mb);
+    }
+
     Ok(())
 }
 
