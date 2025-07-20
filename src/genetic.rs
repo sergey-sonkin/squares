@@ -242,7 +242,7 @@ impl GeneticSolver {
             self.best_fitness_history.push(best_fitness);
             self.diversity_history.push(diversity);
 
-            // Record animation frame
+            // Smart animation recording - only capture meaningful changes
             if let Some(ref mut recorder) = self.animation_recorder {
                 let state = AlgorithmState::GeneticAlgorithm {
                     generation: generation + 1,
@@ -252,25 +252,53 @@ impl GeneticSolver {
                     mutation_rate: self.mutation_rate,
                 };
 
-                if recorder.should_record_frame(generation + 1) {
+                let should_record = 
+                    // Always record first few generations to show initial chaos
+                    generation < 5 ||
+                    // Always record improvements
+                    improvement ||
+                    // Record when diversity changes significantly (population evolving)
+                    (generation > 0 && (diversity - self.diversity_history[self.diversity_history.len() - 2]).abs() > 0.1) ||
+                    // Record periodically but less frequently as we progress
+                    (generation < 50 && generation % 3 == 0) ||  // Every 3rd generation early on
+                    (generation >= 50 && generation < 100 && generation % 8 == 0) ||  // Every 8th generation mid-game
+                    (generation >= 100 && generation % 15 == 0) ||  // Every 15th generation late game
+                    // Record major container size changes
+                    (generation > 0 && 
+                     recorder.data.frames.last().map_or(true, |last_frame| 
+                         (last_frame.container_size - best_container).abs() > 0.05));
+
+                if should_record {
+                    let event_description = if generation < 5 {
+                        Some("Early exploration".to_string())
+                    } else if improvement {
+                        Some(format!("Improvement: {:.4}", best_fitness))
+                    } else if diversity > 0.5 {
+                        Some("High diversity - active evolution".to_string())
+                    } else if diversity < 0.1 {
+                        Some("Low diversity - converging".to_string())
+                    } else {
+                        None
+                    };
+
                     recorder.record_frame(
                         generation + 1,
                         &best_squares,
                         best_container,
                         state.clone(),
                         improvement,
-                        None,
+                        event_description,
                     );
                 }
 
-                // Record significant events
+                // Always record significant fitness improvements as special events
                 if improvement {
                     recorder.record_significant_event(
                         generation + 1,
                         &best_squares,
                         best_container,
                         state,
-                        &format!("New best fitness: {:.6}", best_fitness),
+                        &format!("New best: {:.4} (gen {})", best_fitness, generation + 1),
                     );
                 }
             }
@@ -316,7 +344,11 @@ impl GeneticSolver {
 
         let theoretical_min = (self.num_squares as f64).sqrt() * self.square_size;
         let container_sizes: Vec<f64> = (0..self.population_size)
-            .map(|i| theoretical_min * (1.5 + (i as f64 / self.population_size as f64) * 0.8)) // More generous containers
+            .map(|i| {
+                // Create much more diverse initial containers for visual variety
+                let ratio = i as f64 / self.population_size as f64;
+                theoretical_min * (1.3 + ratio * 1.2) // Range from 1.3x to 2.5x theoretical minimum
+            })
             .collect();
 
         // Generate individuals in parallel
@@ -493,7 +525,7 @@ impl GeneticSolver {
             };
 
             if thread_rng().gen::<f64>() < self.mutation_rate {
-                self.mutate(&mut offspring);
+                self.mutate(&mut offspring, self.generation);
             }
 
             offspring.generation = self.generation;
@@ -504,12 +536,23 @@ impl GeneticSolver {
 
         self.population = new_population;
 
-        // Adaptive mutation rate
+        // Adaptive mutation rate based on generation and diversity
         let diversity = self.calculate_diversity();
+        let exploration_factor = ((200.0 - self.generation as f64) / 200.0).max(0.1).min(1.0);
+        
+        // Start with high mutation rate, decrease over time
+        let base_mutation_rate = 0.05 + 0.25 * exploration_factor; // 5% to 30%
+        
+        // Adjust based on diversity
         if diversity < 0.1 {
-            self.mutation_rate = (self.mutation_rate * 1.1).min(0.3);
+            // Low diversity: increase mutation to explore more
+            self.mutation_rate = (base_mutation_rate * 1.5).min(0.4);
         } else if diversity > 0.5 {
-            self.mutation_rate = (self.mutation_rate * 0.9).max(0.05);
+            // High diversity: can reduce mutation slightly
+            self.mutation_rate = (base_mutation_rate * 0.8).max(0.05);
+        } else {
+            // Normal diversity: use base rate
+            self.mutation_rate = base_mutation_rate;
         }
     }
 
@@ -609,21 +652,28 @@ impl GeneticSolver {
         Individual::new(offspring_squares, container_size, self.generation)
     }
 
-    fn mutate(&self, individual: &mut Individual) {
+    fn mutate(&self, individual: &mut Individual, generation: usize) {
         let mut rng = thread_rng();
 
+        // Adaptive mutation: start aggressive, become refined
+        let max_generations = 200.0; // Assume reasonable max
+        let exploration_factor = ((max_generations - generation as f64) / max_generations)
+            .max(0.1) // Never go below 10% exploration
+            .min(1.0);
+        
         // Choose mutation type with different probabilities
         let mutation_choice = rng.gen::<f64>();
         
         if mutation_choice < 0.4 {
-            // Position mutation (40% chance)
+            // Position mutation (40% chance) - adaptive magnitude
             if !individual.squares.is_empty() {
                 let idx = rng.gen_range(0..individual.squares.len());
                 let square = &mut individual.squares[idx];
 
-                let max_delta = individual.container_size * 0.15; // Slightly larger moves
-                let dx = rng.gen_range(-max_delta..max_delta);
-                let dy = rng.gen_range(-max_delta..max_delta);
+                // Early generations: large moves, later: small refinements
+                let base_delta = individual.container_size * (0.05 + 0.4 * exploration_factor);
+                let dx = rng.gen_range(-base_delta..base_delta);
+                let dy = rng.gen_range(-base_delta..base_delta);
 
                 square.x = (square.x + dx)
                     .max(0.0)
@@ -633,40 +683,60 @@ impl GeneticSolver {
                     .min(individual.container_size - self.square_size);
             }
         } else if mutation_choice < 0.7 && self.allow_rotation {
-            // Angle mutation (30% chance when rotation is enabled)
+            // Angle mutation (30% chance when rotation is enabled) - adaptive rotation
             if !individual.squares.is_empty() {
                 let idx = rng.gen_range(0..individual.squares.len());
                 let square = &mut individual.squares[idx];
 
-                // More aggressive angle mutations
-                if rng.gen_bool(0.3) {
-                    // Complete rotation change (30% of angle mutations)
+                // Early generations: dramatic rotations, later: fine adjustments
+                let dramatic_rotation_chance = 0.1 + 0.6 * exploration_factor; // 10-70% chance
+                
+                if rng.gen::<f64>() < dramatic_rotation_chance {
+                    // Complete rotation change (more likely early on)
                     square.angle = rng.gen::<f64>() * PI / 2.0;
                 } else {
-                    // Small adjustment (70% of angle mutations)
-                    let angle_delta = rng.gen_range(-PI / 6.0..PI / 6.0);
+                    // Incremental adjustment (magnitude decreases over time)
+                    let max_angle_delta = (PI / 12.0) + (PI / 3.0) * exploration_factor; // π/12 to π/3
+                    let angle_delta = rng.gen_range(-max_angle_delta..max_angle_delta);
                     square.angle = (square.angle + angle_delta) % (PI / 2.0);
                 }
             }
-        } else if mutation_choice < 0.9 {
-            // Swap mutation (15% chance)
-            if individual.squares.len() >= 2 {
+        } else if mutation_choice < 0.85 {
+            // Swap mutation (15% chance) - more likely early on
+            if individual.squares.len() >= 2 && rng.gen::<f64>() < (0.5 + 0.5 * exploration_factor) {
                 let idx1 = rng.gen_range(0..individual.squares.len());
                 let idx2 = rng.gen_range(0..individual.squares.len());
 
                 if idx1 != idx2 {
-                    let pos1 = (individual.squares[idx1].x, individual.squares[idx1].y);
-                    let pos2 = (individual.squares[idx2].x, individual.squares[idx2].y);
+                    // Early generations: swap positions and angles, later: just positions
+                    if exploration_factor > 0.5 && self.allow_rotation {
+                        // Swap everything
+                        let square1 = individual.squares[idx1];
+                        let square2 = individual.squares[idx2];
+                        
+                        individual.squares[idx1].x = square2.x;
+                        individual.squares[idx1].y = square2.y;
+                        individual.squares[idx1].angle = square2.angle;
+                        
+                        individual.squares[idx2].x = square1.x;
+                        individual.squares[idx2].y = square1.y;
+                        individual.squares[idx2].angle = square1.angle;
+                    } else {
+                        // Just swap positions
+                        let pos1 = (individual.squares[idx1].x, individual.squares[idx1].y);
+                        let pos2 = (individual.squares[idx2].x, individual.squares[idx2].y);
 
-                    individual.squares[idx1].x = pos2.0;
-                    individual.squares[idx1].y = pos2.1;
-                    individual.squares[idx2].x = pos1.0;
-                    individual.squares[idx2].y = pos1.1;
+                        individual.squares[idx1].x = pos2.0;
+                        individual.squares[idx1].y = pos2.1;
+                        individual.squares[idx2].x = pos1.0;
+                        individual.squares[idx2].y = pos1.1;
+                    }
                 }
             }
         } else {
-            // Container size mutation (10% chance)
-            let delta = rng.gen_range(-0.05..0.05); // Smaller container changes
+            // Container size mutation (15% chance) - adaptive magnitude
+            let base_delta = 0.02 + 0.08 * exploration_factor; // 2-10% changes
+            let delta = rng.gen_range(-base_delta..base_delta);
             individual.container_size = (individual.container_size * (1.0 + delta))
                 .max(self.square_size * (self.num_squares as f64).sqrt());
         }
