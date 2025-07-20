@@ -6,7 +6,6 @@ use std::path::Path;
 pub struct AnimationRenderer {
     width: u32,
     height: u32,
-    margin: f64,
 }
 
 impl AnimationRenderer {
@@ -14,7 +13,6 @@ impl AnimationRenderer {
         Self {
             width,
             height,
-            margin: 50.0,
         }
     }
 
@@ -50,9 +48,16 @@ impl AnimationRenderer {
         frame: &AnimationFrame,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let container_size = frame.container_size;
-        let padding = self.margin;
         
-        // Calculate coordinate system
+        // Calculate appropriate padding based on square size and container
+        let square_size = if !frame.squares.is_empty() { 
+            frame.squares[0].size 
+        } else { 
+            1.0 
+        };
+        let padding = (square_size * 0.5).max(container_size * 0.1);
+        
+        // Calculate coordinate system with proper scaling
         let chart_area = root.margin(20, 20, 20, 100);
         let mut chart = ChartBuilder::on(&chart_area)
             .caption(
@@ -92,9 +97,16 @@ impl AnimationRenderer {
         frame: &InterpolatedFrame,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let container_size = frame.container_size;
-        let padding = self.margin;
         
-        // Calculate coordinate system
+        // Calculate appropriate padding based on square size and container
+        let square_size = if !frame.squares.is_empty() { 
+            frame.squares[0].size 
+        } else { 
+            1.0 
+        };
+        let padding = (square_size * 0.5).max(container_size * 0.1);
+        
+        // Calculate coordinate system with proper scaling
         let chart_area = root.margin(20, 20, 20, 100);
         let mut chart = ChartBuilder::on(&chart_area)
             .caption(
