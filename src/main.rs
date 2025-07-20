@@ -1,6 +1,7 @@
 use clap::{Parser, Subcommand};
 use std::time::Instant;
 
+mod animation;
 mod genetic;
 mod geometry;
 mod solver;
@@ -37,6 +38,14 @@ enum Commands {
         /// Allow rotation of squares
         #[arg(short, long)]
         rotation: bool,
+
+        /// Record animation data to file
+        #[arg(long)]
+        record_animation: Option<String>,
+
+        /// Animation frame recording interval
+        #[arg(long, default_value = "100")]
+        frame_interval: usize,
     },
 
     /// Solve square packing using genetic algorithm
@@ -56,6 +65,14 @@ enum Commands {
         /// Allow rotation of squares
         #[arg(short, long)]
         rotation: bool,
+
+        /// Record animation data to file
+        #[arg(long)]
+        record_animation: Option<String>,
+
+        /// Animation frame recording interval
+        #[arg(long, default_value = "10")]
+        frame_interval: usize,
     },
 
     /// Test against known optimal solutions
@@ -101,11 +118,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             iterations,
             visualize,
             rotation,
+            record_animation,
+            frame_interval,
         } => {
             println!("Solving {} squares packing problem...", num_squares);
             let start = Instant::now();
 
             let mut solver = SquarePackingSolver::new(num_squares, 1.0, rotation);
+            
+            // Enable animation recording if requested
+            if record_animation.is_some() {
+                solver = solver.with_animation_recording(frame_interval);
+            }
+            
             let (solution, container_size) = solver.solve(iterations)?;
 
             let duration = start.elapsed();
@@ -134,6 +159,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 );
             }
 
+            // Save animation data if requested
+            if let Some(animation_file) = record_animation {
+                solver.save_animation_data(&animation_file)?;
+            }
+
             // Show iteration history
             solver.print_convergence_summary();
         }
@@ -143,6 +173,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             generations,
             visualize,
             rotation,
+            record_animation,
+            frame_interval,
         } => {
             println!(
                 "Solving {} squares packing problem using genetic algorithm...",

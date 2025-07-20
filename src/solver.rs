@@ -1,3 +1,4 @@
+use crate::animation::*;
 use crate::geometry::*;
 use rand::prelude::*;
 use std::f64::consts::PI;
@@ -20,6 +21,7 @@ pub struct SquarePackingSolver {
     best_container_size: f64,
     iteration_history: Vec<IterationRecord>,
     rng: ThreadRng,
+    animation_recorder: Option<AnimationRecorder>,
 }
 
 impl SquarePackingSolver {
@@ -32,7 +34,19 @@ impl SquarePackingSolver {
             best_container_size: f64::INFINITY,
             iteration_history: Vec::new(),
             rng: thread_rng(),
+            animation_recorder: None,
         }
+    }
+
+    pub fn with_animation_recording(mut self, frame_interval: usize) -> Self {
+        self.animation_recorder = Some(AnimationRecorder::new(
+            "Simulated Annealing".to_string(),
+            self.num_squares,
+            self.square_size,
+            self.allow_rotation,
+            frame_interval,
+        ));
+        self
     }
 
     pub fn solve(
@@ -60,10 +74,23 @@ impl SquarePackingSolver {
         self.best_solution = Some(current_solution.clone());
         self.best_container_size = container_size;
 
+        // Record initial frame
+        let initial_energy = self.calculate_energy(&current_solution, container_size);
+        if let Some(ref mut recorder) = self.animation_recorder {
+            let state = AlgorithmState::SimulatedAnnealing {
+                temperature: 1.0,
+                energy: initial_energy,
+                acceptance_rate: 0.0,
+            };
+            recorder.record_frame(0, &current_solution, container_size, state, false, Some("Initial solution".to_string()));
+        }
+
         // Simulated annealing
         let mut temperature = 1.0;
         let cooling_rate = 0.9995;
         let min_temperature = 1e-8;
+        let mut acceptance_count = 0;
+        let mut total_attempts = 0;
 
         for iteration in 0..max_iterations {
             // Occasionally try to reduce container size
@@ -96,6 +123,7 @@ impl SquarePackingSolver {
             let mut improvement = false;
             if accept {
                 current_solution = new_solution;
+                acceptance_count += 1;
 
                 // Check if this is a new best
                 if container_size < self.best_container_size {
@@ -104,6 +132,7 @@ impl SquarePackingSolver {
                     improvement = true;
                 }
             }
+            total_attempts += 1;
 
             // Record iteration
             if iteration % 100 == 0 {
@@ -115,6 +144,43 @@ impl SquarePackingSolver {
                     energy: current_energy,
                     improvement,
                 });
+            }
+
+            // Record animation frame
+            if let Some(ref mut recorder) = self.animation_recorder {
+                let acceptance_rate = if total_attempts > 0 {
+                    acceptance_count as f64 / total_attempts as f64
+                } else {
+                    0.0
+                };
+
+                let state = AlgorithmState::SimulatedAnnealing {
+                    temperature,
+                    energy: current_energy,
+                    acceptance_rate,
+                };
+
+                if recorder.should_record_frame(iteration) {
+                    recorder.record_frame(
+                        iteration,
+                        &current_solution,
+                        container_size,
+                        state.clone(),
+                        improvement,
+                        None,
+                    );
+                }
+
+                // Record significant events
+                if improvement {
+                    recorder.record_significant_event(
+                        iteration,
+                        &current_solution,
+                        container_size,
+                        state,
+                        &format!("New best solution: {:.6}", self.best_container_size),
+                    );
+                }
             }
 
             // Cool down
@@ -133,6 +199,11 @@ impl SquarePackingSolver {
             {
                 break;
             }
+        }
+
+        // Finalize animation recording
+        if let Some(ref mut recorder) = self.animation_recorder {
+            recorder.finalize();
         }
 
         match &self.best_solution {
@@ -399,5 +470,15 @@ impl SquarePackingSolver {
                 last.best_size, last.iteration
             );
         }
+    }
+
+    pub fn save_animation_data<P: AsRef<std::path::Path>>(&self, path: P) -> Result<(), Box<dyn std::error::Error>> {
+        if let Some(ref recorder) = self.animation_recorder {
+            recorder.save_to_file(path)?;
+            println!("Animation data saved");
+        } else {
+            return Err("No animation data to save".into());
+        }
+        Ok(())
     }
 }
