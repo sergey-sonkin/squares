@@ -5,6 +5,7 @@ mod animation;
 mod animation_renderer;
 mod genetic;
 mod geometry;
+mod output_manager;
 mod solver;
 mod video_generator;
 mod visualization;
@@ -12,6 +13,7 @@ mod visualization;
 use animation::*;
 use animation_renderer::*;
 use genetic::*;
+use output_manager::*;
 use solver::*;
 use video_generator::*;
 use visualization::*;
@@ -174,6 +176,10 @@ enum Commands {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
+    
+    // Initialize output manager and create directories
+    let output_manager = OutputManager::new();
+    output_manager.create_directories()?;
 
     match cli.command {
         Commands::Solve {
@@ -211,20 +217,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
 
             if visualize {
-                create_visualization(
-                    &solution,
-                    container_size,
-                    &format!("{}_squares_solution.png", num_squares),
-                )?;
-                println!(
-                    "Visualization saved to {}_squares_solution.png",
-                    num_squares
-                );
+                let vis_filename = format!("{}_squares_solution.png", num_squares);
+                let vis_path = output_manager.image_path(&vis_filename);
+                create_visualization(&solution, container_size, vis_path.to_str().unwrap())?;
+                println!("Visualization saved to: {}", vis_path.display());
             }
 
             // Save animation data if requested
             if let Some(animation_file) = record_animation {
-                solver.save_animation_data(&animation_file)?;
+                let output_path = output_manager.animation_json_path(&animation_file);
+                solver.save_animation_data(&output_path)?;
+                println!("Animation data saved to: {}", output_path.display());
             }
 
             // Show iteration history
@@ -236,8 +239,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             generations,
             visualize,
             rotation,
-            record_animation: _,
-            frame_interval: _,
+            record_animation,
+            frame_interval,
         } => {
             println!(
                 "Solving {} squares packing problem using genetic algorithm...",
@@ -246,6 +249,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let start = Instant::now();
 
             let mut genetic_solver = GeneticSolver::new(num_squares, 1.0, rotation);
+            
+            // Enable animation recording if requested
+            if record_animation.is_some() {
+                genetic_solver = genetic_solver.with_animation_recording(frame_interval);
+            }
+            
             let (solution, container_size) = genetic_solver.solve(generations)?;
 
             let duration = start.elapsed();
@@ -263,12 +272,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
 
             if visualize {
-                create_visualization(
-                    &solution,
-                    container_size,
-                    &format!("{}_squares_genetic.png", num_squares),
-                )?;
-                println!("Visualization saved to {}_squares_genetic.png", num_squares);
+                let vis_filename = format!("{}_squares_genetic.png", num_squares);
+                let vis_path = output_manager.image_path(&vis_filename);
+                create_visualization(&solution, container_size, vis_path.to_str().unwrap())?;
+                println!("Visualization saved to: {}", vis_path.display());
+            }
+
+            // Save animation data if requested
+            if let Some(animation_file) = record_animation {
+                let output_path = output_manager.animation_json_path(&animation_file);
+                genetic_solver.save_animation_data(&output_path)?;
+                println!("Animation data saved to: {}", output_path.display());
             }
 
             // Show genetic algorithm statistics
@@ -326,9 +340,17 @@ fn render_animation_command(
     height: u32,
     interpolate: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    println!("Loading animation data from {}...", input_path);
+    let output_manager = OutputManager::new();
     
-    let animation_data = AnimationRecorder::load_from_file(&input_path)?;
+    // Handle input path - check if it's just a filename or full path
+    let full_input_path = if input_path.contains('/') || input_path.contains('\\') {
+        input_path.clone()
+    } else {
+        output_manager.animation_json_path(&input_path).to_string_lossy().to_string()
+    };
+    
+    println!("Loading animation data from {}...", full_input_path);
+    let animation_data = AnimationRecorder::load_from_file(&full_input_path)?;
     
     println!("Animation info:");
     println!("  Algorithm: {}", animation_data.algorithm_name);
@@ -338,19 +360,21 @@ fn render_animation_command(
     
     let renderer = AnimationSequenceRenderer::new(width, height, fps, interpolate);
     
-    println!("Rendering animation frames to {}...", output_dir);
-    let frame_files = renderer.render_animation_sequence(&animation_data, &output_dir)?;
+    // Use output manager for frames directory
+    let frames_path = output_manager.frames_dir_path(&output_dir);
+    println!("Rendering animation frames to {}...", frames_path.display());
+    let frame_files = renderer.render_animation_sequence(&animation_data, &frames_path)?;
     
     println!("Successfully rendered {} frames", frame_files.len());
-    println!("Output directory: {}", output_dir);
+    println!("Output directory: {}", frames_path.display());
     
     if interpolate {
         println!("Interpolated to {:.1} FPS", fps);
         println!("Total output frames: {}", frame_files.len());
     }
     
-    println!("\nTo create a video, you can use ffmpeg:");
-    println!("  ffmpeg -framerate {} -i {}/frame_%06d.png -c:v libx264 -r 30 -pix_fmt yuv420p output.mp4", fps, output_dir);
+    println!("\nTo create a video, you can use the animate command:");
+    println!("  cargo run -- animate -i {} -o video_name.mp4", input_path);
     
     Ok(())
 }
@@ -369,8 +393,17 @@ fn animate_command(
         return Err("FFmpeg not found. Please install FFmpeg to generate videos.".into());
     }
 
-    println!("Loading animation data from {}...", input_path);
-    let animation_data = AnimationRecorder::load_from_file(&input_path)?;
+    let output_manager = OutputManager::new();
+    
+    // Handle input path - check if it's just a filename or full path
+    let full_input_path = if input_path.contains('/') || input_path.contains('\\') {
+        input_path.clone()
+    } else {
+        output_manager.animation_json_path(&input_path).to_string_lossy().to_string()
+    };
+
+    println!("Loading animation data from {}...", full_input_path);
+    let animation_data = AnimationRecorder::load_from_file(&full_input_path)?;
     
     println!("Animation info:");
     println!("  Algorithm: {}", animation_data.algorithm_name);
@@ -378,9 +411,11 @@ fn animate_command(
     println!("  Total frames: {}", animation_data.frames.len());
     println!("  Duration: {:.2}s", animation_data.metadata.total_duration);
 
+    // Use output manager for organized output
+    let final_output_path = output_manager.get_output_path(&output_path);
+    
     // Determine video format from output extension
-    let output_path_obj = std::path::Path::new(&output_path);
-    let extension = output_path_obj
+    let extension = final_output_path
         .extension()
         .and_then(|ext| ext.to_str())
         .unwrap_or("mp4");
@@ -416,13 +451,13 @@ fn animate_command(
 
     // Generate video
     println!("Generating {} video...", extension.to_uppercase());
-    generator.generate_video(&animation_data, &output_path)?;
+    generator.generate_video(&animation_data, &final_output_path)?;
     
     println!("Video generation complete!");
-    println!("Output file: {}", output_path);
+    println!("Output file: {}", final_output_path.display());
     
     // Display file size
-    if let Ok(metadata) = std::fs::metadata(&output_path) {
+    if let Ok(metadata) = std::fs::metadata(&final_output_path) {
         let size_mb = metadata.len() as f64 / (1024.0 * 1024.0);
         println!("File size: {:.2} MB", size_mb);
     }

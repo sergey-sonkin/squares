@@ -1,3 +1,4 @@
+use crate::animation::*;
 use crate::geometry::*;
 use rand::prelude::*;
 use rayon::prelude::*;
@@ -137,6 +138,7 @@ pub struct GeneticSolver {
     generation: usize,
     best_fitness_history: Vec<f64>,
     diversity_history: Vec<f64>,
+    animation_recorder: Option<AnimationRecorder>,
 }
 
 impl GeneticSolver {
@@ -156,7 +158,29 @@ impl GeneticSolver {
             generation: 0,
             best_fitness_history: Vec::new(),
             diversity_history: Vec::new(),
+            animation_recorder: None,
         }
+    }
+
+    pub fn with_animation_recording(mut self, frame_interval: usize) -> Self {
+        self.animation_recorder = Some(AnimationRecorder::new(
+            "Genetic Algorithm".to_string(),
+            self.num_squares,
+            self.square_size,
+            self.allow_rotation,
+            frame_interval,
+        ));
+        self
+    }
+
+    pub fn save_animation_data<P: AsRef<std::path::Path>>(&self, path: P) -> Result<(), Box<dyn std::error::Error>> {
+        if let Some(ref recorder) = self.animation_recorder {
+            recorder.save_to_file(path)?;
+            println!("Animation data saved");
+        } else {
+            return Err("No animation data to save".into());
+        }
+        Ok(())
     }
 
     pub fn solve(
@@ -172,6 +196,31 @@ impl GeneticSolver {
             self.get_best_individual().fitness
         );
 
+        // Record initial frame
+        let best_individual = self.get_best_individual();
+        let initial_fitness = best_individual.fitness;
+        let initial_container = best_individual.container_size;
+        let initial_squares = best_individual.squares.clone();
+        let initial_diversity = self.calculate_diversity();
+        
+        if let Some(ref mut recorder) = self.animation_recorder {
+            let state = AlgorithmState::GeneticAlgorithm {
+                generation: 0,
+                best_fitness: initial_fitness,
+                diversity: initial_diversity,
+                population_size: self.population_size,
+                mutation_rate: self.mutation_rate,
+            };
+            recorder.record_frame(
+                0,
+                &initial_squares,
+                initial_container,
+                state,
+                false,
+                Some("Initial population".to_string()),
+            );
+        }
+
         for generation in 0..max_generations {
             self.generation = generation;
 
@@ -179,11 +228,52 @@ impl GeneticSolver {
             self.evolve_generation();
 
             // Track statistics
-            let best_fitness = self.get_best_individual().fitness;
-            let best_container = self.get_best_individual().container_size;
+            let best_individual = self.get_best_individual();
+            let best_fitness = best_individual.fitness;
+            let best_container = best_individual.container_size;
+            let best_squares = best_individual.squares.clone();
             let diversity = self.calculate_diversity();
+            let improvement = if let Some(last_fitness) = self.best_fitness_history.last() {
+                best_fitness < *last_fitness
+            } else {
+                false
+            };
+            
             self.best_fitness_history.push(best_fitness);
             self.diversity_history.push(diversity);
+
+            // Record animation frame
+            if let Some(ref mut recorder) = self.animation_recorder {
+                let state = AlgorithmState::GeneticAlgorithm {
+                    generation: generation + 1,
+                    best_fitness,
+                    diversity,
+                    population_size: self.population_size,
+                    mutation_rate: self.mutation_rate,
+                };
+
+                if recorder.should_record_frame(generation + 1) {
+                    recorder.record_frame(
+                        generation + 1,
+                        &best_squares,
+                        best_container,
+                        state.clone(),
+                        improvement,
+                        None,
+                    );
+                }
+
+                // Record significant events
+                if improvement {
+                    recorder.record_significant_event(
+                        generation + 1,
+                        &best_squares,
+                        best_container,
+                        state,
+                        &format!("New best fitness: {:.6}", best_fitness),
+                    );
+                }
+            }
 
             // Print progress
             if generation % 50 == 0 || generation < 10 {
@@ -206,6 +296,11 @@ impl GeneticSolver {
                 println!("Converged at generation {}", generation);
                 break;
             }
+        }
+
+        // Finalize animation recording
+        if let Some(ref mut recorder) = self.animation_recorder {
+            recorder.finalize();
         }
 
         let best = self.get_best_individual();

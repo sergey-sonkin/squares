@@ -1,11 +1,16 @@
 # Square Packing Solver
 
-## Implementation
+A high-performance square packing optimization suite with advanced animation and visualization capabilities.
 
-- SAT collision detection for rotated squares
-- Real-time convergence tracking and visualization
-- Parallel population evaluation
-- Comprehensive benchmarking and comparison tools
+## Features
+
+- **Dual Algorithm Support**: Simulated Annealing and Genetic Algorithm solvers
+- **Animation System**: Record and render optimization process as smooth videos
+- **Output Organization**: Structured folders for JSON, videos, images, and frames
+- **Multiple Formats**: MP4, GIF, WEBM video generation with FFmpeg
+- **SAT Collision Detection**: Precise overlap detection for rotated squares
+- **Real-time Visualization**: Progress tracking and solution display
+- **Comprehensive Benchmarking**: Performance comparison and testing tools
 
 ## Algorithms
 
@@ -43,6 +48,21 @@ cargo run -- genetic --num-squares 17 --rotation --visualize
 cargo run -- genetic --num-squares 10 --generations 100 --rotation
 ```
 
+### Animation & Video Generation
+```bash
+# Record simulated annealing with animation
+cargo run -- solve --num-squares 8 --rotation --record-animation sa_demo --frame-interval 50 --visualize
+
+# Record genetic algorithm with animation  
+cargo run -- genetic --num-squares 8 --generations 200 --rotation --record-animation ga_demo --frame-interval 10 --visualize
+
+# Generate MP4 video from animation data
+cargo run -- animate -i ga_demo -o genetic_demo.mp4 --fps 24 --interpolate
+
+# Export frames for custom editing
+cargo run -- render-animation -i sa_demo -o sa_frames --fps 30 --interpolate
+```
+
 ### Testing & Comparison
 ```bash
 # Test against known optimal solutions
@@ -57,11 +77,33 @@ cargo run -- benchmark --num-squares 17 --runs 5
 
 ## Results
 
-| Algorithm | 17 Squares | Time |
-|-----------|------------|------|
-| Simulated Annealing | 1.35x optimal | ~2.5s |
-| **Genetic Algorithm** | **1.06x optimal** | ~15s |
+| Algorithm | 17 Squares | Time | Animation Support |
+|-----------|------------|------|-------------------|
+| Simulated Annealing | 1.35x optimal | ~2.5s | ✅ Full recording |
+| **Genetic Algorithm** | **1.06x optimal** | ~15s | ✅ Full recording |
 
 - Bidwell's 1997 optimal: 4.675
 - Genetic algorithm finds solutions only 6% above optimal
 - Supports square rotation for better packing efficiency
+- Complete animation pipeline: optimization → JSON → MP4/GIF/WEBM
+
+## Output Structure
+
+```
+outputs/
+├── json/           # Animation data files
+├── mp4/            # Video animations  
+├── gif/            # GIF animations
+├── webm/           # WebM videos
+├── frames/         # Frame sequences
+└── images/         # Static visualizations
+```
+
+## Animation Features
+
+- **Smooth Interpolation**: 60+ FPS frame interpolation for fluid motion
+- **Algorithm Visualization**: Real-time display of optimization metrics
+- **Multiple Formats**: MP4, GIF, WebM with configurable quality
+- **Organized Output**: Automatic file organization by type
+- **FFmpeg Integration**: Professional video encoding with compression
+- **Educational Value**: Clear demonstration of algorithm differences
