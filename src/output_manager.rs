@@ -1,5 +1,5 @@
-use std::path::{Path, PathBuf};
 use std::fs;
+use std::path::{Path, PathBuf};
 
 pub struct OutputManager {
     base_dir: PathBuf,
@@ -20,12 +20,12 @@ impl OutputManager {
     /// Ensure all output directories exist
     pub fn create_directories(&self) -> std::io::Result<()> {
         let dirs = ["json", "mp4", "gif", "webm", "frames", "images"];
-        
+
         for dir in &dirs {
             let path = self.base_dir.join(dir);
             fs::create_dir_all(&path)?;
         }
-        
+
         Ok(())
     }
 
@@ -38,7 +38,7 @@ impl OutputManager {
 
         let subdir = match extension.to_lowercase().as_str() {
             "json" => "json",
-            "mp4" => "mp4", 
+            "mp4" => "mp4",
             "gif" => "gif",
             "webm" => "webm",
             "png" | "jpg" | "jpeg" => "images",
@@ -72,14 +72,14 @@ impl OutputManager {
         } else {
             format!("{}.{}", name, format)
         };
-        
+
         let subdir = match format.to_lowercase().as_str() {
             "mp4" => "mp4",
-            "gif" => "gif", 
+            "gif" => "gif",
             "webm" => "webm",
             _ => "mp4", // Default to mp4
         };
-        
+
         self.base_dir.join(subdir).join(filename)
     }
 
@@ -110,7 +110,10 @@ impl OutputManager {
         }
 
         let parent = base_path.parent().unwrap_or(Path::new("."));
-        let stem = base_path.file_stem().and_then(|s| s.to_str()).unwrap_or("file");
+        let stem = base_path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("file");
         let extension = base_path.extension().and_then(|s| s.to_str()).unwrap_or("");
 
         for i in 1..1000 {
@@ -119,7 +122,7 @@ impl OutputManager {
             } else {
                 format!("{}_{}.{}", stem, i, extension)
             };
-            
+
             let new_path = parent.join(new_filename);
             if !new_path.exists() {
                 return new_path;
@@ -131,20 +134,20 @@ impl OutputManager {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        
+
         let new_filename = if extension.is_empty() {
             format!("{}_{}", stem, timestamp)
         } else {
             format!("{}_{}.{}", stem, timestamp, extension)
         };
-        
+
         parent.join(new_filename)
     }
 
     /// Clean up old files (keep only the most recent N files of each type)
     pub fn cleanup_old_files(&self, keep_recent: usize) -> std::io::Result<()> {
         let dirs = ["json", "mp4", "gif", "webm", "images"];
-        
+
         for dir in &dirs {
             let dir_path = self.base_dir.join(dir);
             if !dir_path.exists() {
@@ -202,19 +205,31 @@ mod tests {
             manager.get_output_path("test.json").file_name().unwrap(),
             "test.json"
         );
-        assert!(manager.get_output_path("test.json").parent().unwrap().ends_with("json"));
+        assert!(manager
+            .get_output_path("test.json")
+            .parent()
+            .unwrap()
+            .ends_with("json"));
 
         assert_eq!(
             manager.get_output_path("video.mp4").file_name().unwrap(),
             "video.mp4"
         );
-        assert!(manager.get_output_path("video.mp4").parent().unwrap().ends_with("mp4"));
+        assert!(manager
+            .get_output_path("video.mp4")
+            .parent()
+            .unwrap()
+            .ends_with("mp4"));
 
         assert_eq!(
             manager.get_output_path("anim.gif").file_name().unwrap(),
             "anim.gif"
         );
-        assert!(manager.get_output_path("anim.gif").parent().unwrap().ends_with("gif"));
+        assert!(manager
+            .get_output_path("anim.gif")
+            .parent()
+            .unwrap()
+            .ends_with("gif"));
     }
 
     #[test]

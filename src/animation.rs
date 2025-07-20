@@ -94,11 +94,10 @@ impl AnimationRecorder {
     }
 
     pub fn should_record_frame(&self, iteration: usize) -> bool {
-        self.recording && (
-            iteration == 0 || // Always record first frame
+        self.recording
+            && (iteration == 0 || // Always record first frame
             iteration % self.frame_interval == 0 || // Regular intervals
-            iteration - self.last_recorded_iteration >= self.frame_interval
-        )
+            iteration - self.last_recorded_iteration >= self.frame_interval)
     }
 
     pub fn record_frame(
@@ -179,7 +178,9 @@ impl AnimationRecorder {
         Ok(())
     }
 
-    pub fn load_from_file<P: AsRef<Path>>(path: P) -> Result<AnimationData, Box<dyn std::error::Error>> {
+    pub fn load_from_file<P: AsRef<Path>>(
+        path: P,
+    ) -> Result<AnimationData, Box<dyn std::error::Error>> {
         let json = std::fs::read_to_string(path)?;
         let data: AnimationData = serde_json::from_str(&json)?;
         Ok(data)
@@ -209,18 +210,26 @@ impl AnimationData {
     }
 
     pub fn get_significant_events(&self) -> Vec<&AnimationFrame> {
-        self.frames.iter().filter(|f| f.significant_event.is_some()).collect()
+        self.frames
+            .iter()
+            .filter(|f| f.significant_event.is_some())
+            .collect()
     }
 
     pub fn get_container_size_progression(&self) -> Vec<(f64, f64)> {
-        self.frames.iter()
+        self.frames
+            .iter()
             .map(|f| (f.timestamp, f.container_size))
             .collect()
     }
 
     pub fn get_frame_at_time(&self, timestamp: f64) -> Option<&AnimationFrame> {
-        self.frames.iter()
-            .min_by(|a, b| (a.timestamp - timestamp).abs().partial_cmp(&(b.timestamp - timestamp).abs()).unwrap())
+        self.frames.iter().min_by(|a, b| {
+            (a.timestamp - timestamp)
+                .abs()
+                .partial_cmp(&(b.timestamp - timestamp).abs())
+                .unwrap()
+        })
     }
 
     pub fn interpolate_frame(&self, timestamp: f64) -> Option<InterpolatedFrame> {
@@ -250,7 +259,11 @@ impl AnimationData {
                 }
 
                 let progress = (timestamp - before_frame.timestamp) / duration;
-                Some(InterpolatedFrame::interpolate(before_frame, after_frame, progress))
+                Some(InterpolatedFrame::interpolate(
+                    before_frame,
+                    after_frame,
+                    progress,
+                ))
             }
             (Some(frame), None) => {
                 // Only before frame exists (end of animation)
@@ -287,7 +300,8 @@ impl InterpolatedFrame {
         let progress = progress.clamp(0.0, 1.0);
 
         // Interpolate container size
-        let container_size = before.container_size + (after.container_size - before.container_size) * progress;
+        let container_size =
+            before.container_size + (after.container_size - before.container_size) * progress;
 
         // Interpolate square positions (assuming same number of squares)
         let mut squares = Vec::new();
@@ -299,7 +313,7 @@ impl InterpolatedFrame {
 
             let x = before_sq.x + (after_sq.x - before_sq.x) * progress;
             let y = before_sq.y + (after_sq.y - before_sq.y) * progress;
-            
+
             // Handle angle interpolation (shortest path)
             let mut angle_diff = after_sq.angle - before_sq.angle;
             if angle_diff > PI / 4.0 {
@@ -331,13 +345,7 @@ mod tests {
 
     #[test]
     fn test_animation_recorder_creation() {
-        let recorder = AnimationRecorder::new(
-            "TestAlgorithm".to_string(),
-            10,
-            1.0,
-            true,
-            100,
-        );
+        let recorder = AnimationRecorder::new("TestAlgorithm".to_string(), 10, 1.0, true, 100);
 
         assert_eq!(recorder.data.algorithm_name, "TestAlgorithm");
         assert_eq!(recorder.data.problem_size, 10);
@@ -346,13 +354,7 @@ mod tests {
 
     #[test]
     fn test_frame_recording() {
-        let mut recorder = AnimationRecorder::new(
-            "TestAlgorithm".to_string(),
-            2,
-            1.0,
-            false,
-            1,
-        );
+        let mut recorder = AnimationRecorder::new("TestAlgorithm".to_string(), 2, 1.0, false, 1);
 
         let squares = vec![
             Square::new(0.0, 0.0, 1.0, 0.0),
@@ -401,7 +403,7 @@ mod tests {
         };
 
         let interpolated = InterpolatedFrame::interpolate(&frame1, &frame2, 0.5);
-        
+
         assert_eq!(interpolated.squares.len(), 1);
         assert!((interpolated.squares[0].x - 1.0).abs() < 1e-10);
         assert!((interpolated.squares[0].y - 0.5).abs() < 1e-10);

@@ -200,7 +200,7 @@ enum Commands {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
-    
+
     // Initialize output manager and create directories
     let output_manager = OutputManager::new();
     output_manager.create_directories()?;
@@ -221,12 +221,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let start = Instant::now();
 
             let mut solver = SquarePackingSolver::new(num_squares, 1.0, rotation);
-            
+
             // Enable animation recording if requested
             if record_animation.is_some() {
                 solver = solver.with_animation_recording(frame_interval);
             }
-            
+
             let (solution, container_size) = solver.solve(iterations)?;
 
             let duration = start.elapsed();
@@ -263,20 +263,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     // Check if FFmpeg is available
                     if !detect_ffmpeg() {
                         println!("Warning: FFmpeg not found. Skipping video generation.");
-                        println!("You can install FFmpeg and run: cargo run -- animate -i {} -o {}", animation_file, video_filename);
+                        println!(
+                            "You can install FFmpeg and run: cargo run -- animate -i {} -o {}",
+                            animation_file, video_filename
+                        );
                     } else {
                         println!("Generating video from animation data...");
-                        
+
                         let input_path = output_manager.animation_json_path(&animation_file);
                         let animation_data = AnimationRecorder::load_from_file(&input_path)?;
-                        
+
                         let final_output_path = output_manager.get_output_path(&video_filename);
                         let extension = final_output_path
                             .extension()
                             .and_then(|ext| ext.to_str())
                             .unwrap_or("mp4");
-                        
-                        let format = VideoFormat::from_extension(extension).unwrap_or(VideoFormat::Mp4);
+
+                        let format =
+                            VideoFormat::from_extension(extension).unwrap_or(VideoFormat::Mp4);
                         let config = VideoGeneratorConfig {
                             width: 800,
                             height: 600,
@@ -285,10 +289,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             interpolate: video_interpolate,
                             quality: VideoQuality::Medium,
                         };
-                        
+
                         let generator = VideoGenerator::new(config);
                         generator.generate_video(&animation_data, &final_output_path)?;
-                        
+
                         println!("Video generated: {}", final_output_path.display());
                         if let Ok(metadata) = std::fs::metadata(&final_output_path) {
                             let size_mb = metadata.len() as f64 / (1024.0 * 1024.0);
@@ -296,7 +300,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                     }
                 } else {
-                    println!("Warning: --generate-video requires --record-animation to be specified");
+                    println!(
+                        "Warning: --generate-video requires --record-animation to be specified"
+                    );
                 }
             }
 
@@ -322,12 +328,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let start = Instant::now();
 
             let mut genetic_solver = GeneticSolver::new(num_squares, 1.0, rotation);
-            
+
             // Enable animation recording if requested
             if record_animation.is_some() {
                 genetic_solver = genetic_solver.with_animation_recording(frame_interval);
             }
-            
+
             let (solution, container_size) = genetic_solver.solve(generations)?;
 
             let duration = start.elapsed();
@@ -364,20 +370,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     // Check if FFmpeg is available
                     if !detect_ffmpeg() {
                         println!("Warning: FFmpeg not found. Skipping video generation.");
-                        println!("You can install FFmpeg and run: cargo run -- animate -i {} -o {}", animation_file, video_filename);
+                        println!(
+                            "You can install FFmpeg and run: cargo run -- animate -i {} -o {}",
+                            animation_file, video_filename
+                        );
                     } else {
                         println!("Generating video from animation data...");
-                        
+
                         let input_path = output_manager.animation_json_path(&animation_file);
                         let animation_data = AnimationRecorder::load_from_file(&input_path)?;
-                        
+
                         let final_output_path = output_manager.get_output_path(&video_filename);
                         let extension = final_output_path
                             .extension()
                             .and_then(|ext| ext.to_str())
                             .unwrap_or("mp4");
-                        
-                        let format = VideoFormat::from_extension(extension).unwrap_or(VideoFormat::Mp4);
+
+                        let format =
+                            VideoFormat::from_extension(extension).unwrap_or(VideoFormat::Mp4);
                         let config = VideoGeneratorConfig {
                             width: 800,
                             height: 600,
@@ -386,10 +396,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             interpolate: video_interpolate,
                             quality: VideoQuality::Medium,
                         };
-                        
+
                         let generator = VideoGenerator::new(config);
                         generator.generate_video(&animation_data, &final_output_path)?;
-                        
+
                         println!("Video generated: {}", final_output_path.display());
                         if let Ok(metadata) = std::fs::metadata(&final_output_path) {
                             let size_mb = metadata.len() as f64 / (1024.0 * 1024.0);
@@ -397,7 +407,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                     }
                 } else {
-                    println!("Warning: --generate-video requires --record-animation to be specified");
+                    println!(
+                        "Warning: --generate-video requires --record-animation to be specified"
+                    );
                 }
             }
 
@@ -457,41 +469,44 @@ fn render_animation_command(
     interpolate: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let output_manager = OutputManager::new();
-    
+
     // Handle input path - check if it's just a filename or full path
     let full_input_path = if input_path.contains('/') || input_path.contains('\\') {
         input_path.clone()
     } else {
-        output_manager.animation_json_path(&input_path).to_string_lossy().to_string()
+        output_manager
+            .animation_json_path(&input_path)
+            .to_string_lossy()
+            .to_string()
     };
-    
+
     println!("Loading animation data from {}...", full_input_path);
     let animation_data = AnimationRecorder::load_from_file(&full_input_path)?;
-    
+
     println!("Animation info:");
     println!("  Algorithm: {}", animation_data.algorithm_name);
     println!("  Problem size: {} squares", animation_data.problem_size);
     println!("  Total frames: {}", animation_data.frames.len());
     println!("  Duration: {:.2}s", animation_data.metadata.total_duration);
-    
+
     let renderer = AnimationSequenceRenderer::new(width, height, fps, interpolate);
-    
+
     // Use output manager for frames directory
     let frames_path = output_manager.frames_dir_path(&output_dir);
     println!("Rendering animation frames to {}...", frames_path.display());
     let frame_files = renderer.render_animation_sequence(&animation_data, &frames_path)?;
-    
+
     println!("Successfully rendered {} frames", frame_files.len());
     println!("Output directory: {}", frames_path.display());
-    
+
     if interpolate {
         println!("Interpolated to {:.1} FPS", fps);
         println!("Total output frames: {}", frame_files.len());
     }
-    
+
     println!("\nTo create a video, you can use the animate command:");
     println!("  cargo run -- animate -i {} -o video_name.mp4", input_path);
-    
+
     Ok(())
 }
 
@@ -510,17 +525,20 @@ fn animate_command(
     }
 
     let output_manager = OutputManager::new();
-    
+
     // Handle input path - check if it's just a filename or full path
     let full_input_path = if input_path.contains('/') || input_path.contains('\\') {
         input_path.clone()
     } else {
-        output_manager.animation_json_path(&input_path).to_string_lossy().to_string()
+        output_manager
+            .animation_json_path(&input_path)
+            .to_string_lossy()
+            .to_string()
     };
 
     println!("Loading animation data from {}...", full_input_path);
     let animation_data = AnimationRecorder::load_from_file(&full_input_path)?;
-    
+
     println!("Animation info:");
     println!("  Algorithm: {}", animation_data.algorithm_name);
     println!("  Problem size: {} squares", animation_data.problem_size);
@@ -529,15 +547,14 @@ fn animate_command(
 
     // Use output manager for organized output
     let final_output_path = output_manager.get_output_path(&output_path);
-    
+
     // Determine video format from output extension
     let extension = final_output_path
         .extension()
         .and_then(|ext| ext.to_str())
         .unwrap_or("mp4");
-    
-    let format = VideoFormat::from_extension(extension)
-        .unwrap_or(VideoFormat::Mp4);
+
+    let format = VideoFormat::from_extension(extension).unwrap_or(VideoFormat::Mp4);
 
     // Parse quality setting
     let video_quality = match quality.to_lowercase().as_str() {
@@ -568,10 +585,10 @@ fn animate_command(
     // Generate video
     println!("Generating {} video...", extension.to_uppercase());
     generator.generate_video(&animation_data, &final_output_path)?;
-    
+
     println!("Video generation complete!");
     println!("Output file: {}", final_output_path.display());
-    
+
     // Display file size
     if let Ok(metadata) = std::fs::metadata(&final_output_path) {
         let size_mb = metadata.len() as f64 / (1024.0 * 1024.0);

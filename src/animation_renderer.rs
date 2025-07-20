@@ -10,10 +10,7 @@ pub struct AnimationRenderer {
 
 impl AnimationRenderer {
     pub fn new(width: u32, height: u32) -> Self {
-        Self {
-            width,
-            height,
-        }
+        Self { width, height }
     }
 
     pub fn render_frame_to_file<P: AsRef<Path>>(
@@ -48,20 +45,23 @@ impl AnimationRenderer {
         frame: &AnimationFrame,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let container_size = frame.container_size;
-        
+
         // Calculate appropriate padding based on square size and container
-        let square_size = if !frame.squares.is_empty() { 
-            frame.squares[0].size 
-        } else { 
-            1.0 
+        let square_size = if !frame.squares.is_empty() {
+            frame.squares[0].size
+        } else {
+            1.0
         };
         let padding = (square_size * 0.5).max(container_size * 0.1);
-        
+
         // Calculate coordinate system with proper scaling
         let chart_area = root.margin(20, 20, 20, 100);
         let mut chart = ChartBuilder::on(&chart_area)
             .caption(
-                &format!("Iteration {}: Container Size {:.3}", frame.iteration, container_size),
+                &format!(
+                    "Iteration {}: Container Size {:.3}",
+                    frame.iteration, container_size
+                ),
                 ("Arial", 24).into_font(),
             )
             .x_label_area_size(40)
@@ -97,20 +97,23 @@ impl AnimationRenderer {
         frame: &InterpolatedFrame,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let container_size = frame.container_size;
-        
+
         // Calculate appropriate padding based on square size and container
-        let square_size = if !frame.squares.is_empty() { 
-            frame.squares[0].size 
-        } else { 
-            1.0 
+        let square_size = if !frame.squares.is_empty() {
+            frame.squares[0].size
+        } else {
+            1.0
         };
         let padding = (square_size * 0.5).max(container_size * 0.1);
-        
+
         // Calculate coordinate system with proper scaling
         let chart_area = root.margin(20, 20, 20, 100);
         let mut chart = ChartBuilder::on(&chart_area)
             .caption(
-                &format!("Time {:.3}s: Container Size {:.3}", frame.timestamp, container_size),
+                &format!(
+                    "Time {:.3}s: Container Size {:.3}",
+                    frame.timestamp, container_size
+                ),
                 ("Arial", 24).into_font(),
             )
             .x_label_area_size(40)
@@ -142,14 +145,21 @@ impl AnimationRenderer {
 
     fn draw_square<DB: DrawingBackend>(
         &self,
-        chart: &mut ChartContext<DB, Cartesian2d<plotters::coord::types::RangedCoordf64, plotters::coord::types::RangedCoordf64>>,
+        chart: &mut ChartContext<
+            DB,
+            Cartesian2d<
+                plotters::coord::types::RangedCoordf64,
+                plotters::coord::types::RangedCoordf64,
+            >,
+        >,
         square: &Square,
         color: RGBColor,
-    ) -> Result<(), Box<dyn std::error::Error>> 
-    where 
-        <DB as DrawingBackend>::ErrorType: 'static, {
+    ) -> Result<(), Box<dyn std::error::Error>>
+    where
+        <DB as DrawingBackend>::ErrorType: 'static,
+    {
         let corners = square.corners();
-        
+
         // Draw filled square
         let polygon_points: Vec<(f64, f64)> = corners.iter().map(|p| (p.x, p.y)).collect();
         chart.draw_series(std::iter::once(Polygon::new(
@@ -180,30 +190,46 @@ impl AnimationRenderer {
         state: &AlgorithmState,
         improvement: bool,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let info_area = root.margin(0, 0, 0, 0).margin(20, 20, self.height as i32 - 80, 20);
-        
+        let info_area = root
+            .margin(0, 0, 0, 0)
+            .margin(20, 20, self.height as i32 - 80, 20);
+
         match state {
-            AlgorithmState::SimulatedAnnealing { temperature, energy, acceptance_rate } => {
+            AlgorithmState::SimulatedAnnealing {
+                temperature,
+                energy,
+                acceptance_rate,
+            } => {
                 let info_text = format!(
                     "Temperature: {:.6}\nEnergy: {:.1}\nAcceptance Rate: {:.1}%{}",
                     temperature,
                     energy,
                     acceptance_rate * 100.0,
-                    if improvement { "\n🚀 IMPROVEMENT!" } else { "" }
+                    if improvement {
+                        "\n🚀 IMPROVEMENT!"
+                    } else {
+                        ""
+                    }
                 );
-                
+
                 info_area.draw_text(
                     &info_text,
                     &TextStyle::from(("Arial", 14)).color(&BLACK),
                     (10, 10),
                 )?;
             }
-            AlgorithmState::GeneticAlgorithm { generation, best_fitness, diversity, population_size, mutation_rate } => {
+            AlgorithmState::GeneticAlgorithm {
+                generation,
+                best_fitness,
+                diversity,
+                population_size,
+                mutation_rate,
+            } => {
                 let info_text = format!(
                     "Generation: {}\nBest Fitness: {:.6}\nDiversity: {:.3}\nPopulation: {}\nMutation Rate: {:.3}",
                     generation, best_fitness, diversity, population_size, mutation_rate
                 );
-                
+
                 info_area.draw_text(
                     &info_text,
                     &TextStyle::from(("Arial", 14)).color(&BLACK),
@@ -292,7 +318,7 @@ impl AnimationSequenceRenderer {
         for (i, frame) in animation_data.frames.iter().enumerate() {
             let filename = format!("frame_{:06}.png", i);
             let filepath = output_dir.join(&filename);
-            
+
             self.renderer.render_frame_to_file(frame, &filepath)?;
             frame_files.push(filename);
 
@@ -311,7 +337,7 @@ impl AnimationSequenceRenderer {
         frame_files: &mut Vec<String>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let output_dir = output_dir.as_ref();
-        
+
         if animation_data.frames.is_empty() {
             return Ok(());
         }
@@ -322,16 +348,21 @@ impl AnimationSequenceRenderer {
 
         for i in 0..total_output_frames {
             let timestamp = i as f64 * frame_duration;
-            
+
             if let Some(interpolated_frame) = animation_data.interpolate_frame(timestamp) {
                 let filename = format!("frame_{:06}.png", i);
                 let filepath = output_dir.join(&filename);
-                
-                self.renderer.render_interpolated_frame_to_file(&interpolated_frame, &filepath)?;
+
+                self.renderer
+                    .render_interpolated_frame_to_file(&interpolated_frame, &filepath)?;
                 frame_files.push(filename);
 
                 if i % 50 == 0 {
-                    println!("Rendered interpolated frame {}/{}", i + 1, total_output_frames);
+                    println!(
+                        "Rendered interpolated frame {}/{}",
+                        i + 1,
+                        total_output_frames
+                    );
                 }
             }
         }
@@ -355,7 +386,7 @@ mod tests {
     #[test]
     fn test_hsv_to_rgb_conversion() {
         let renderer = AnimationRenderer::new(100, 100);
-        
+
         // Test red (0°)
         let red = renderer.hsv_to_rgb(0.0, 1.0, 1.0);
         assert_eq!(red.0, 255);

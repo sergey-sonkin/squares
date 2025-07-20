@@ -106,11 +106,11 @@ impl VideoGenerator {
         output_path: P,
     ) -> Result<(), Box<dyn std::error::Error>> {
         println!("Generating video with FFmpeg...");
-        
+
         // Create temporary directory for frames
         let temp_dir = TempDir::new()?;
         let frames_dir = temp_dir.path();
-        
+
         // Step 1: Render frames
         println!("Rendering frames...");
         let renderer = AnimationSequenceRenderer::new(
@@ -119,18 +119,21 @@ impl VideoGenerator {
             self.config.fps,
             self.config.interpolate,
         );
-        
+
         let frame_files = renderer.render_animation_sequence(animation_data, frames_dir)?;
-        
+
         if frame_files.is_empty() {
             return Err("No frames were generated".into());
         }
-        
+
         // Step 2: Generate video using FFmpeg
         println!("Encoding video...");
         self.encode_video(frames_dir, &output_path, frame_files.len())?;
-        
-        println!("Video generation complete: {}", output_path.as_ref().display());
+
+        println!(
+            "Video generation complete: {}",
+            output_path.as_ref().display()
+        );
         Ok(())
     }
 
@@ -142,7 +145,7 @@ impl VideoGenerator {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let input_pattern = frames_dir.join("frame_%06d.png");
         let output_path = output_path.as_ref();
-        
+
         let mut cmd = Command::new("ffmpeg");
         cmd.arg("-y") // Overwrite output file
             .arg("-framerate")
@@ -151,7 +154,7 @@ impl VideoGenerator {
             .arg(&input_pattern)
             .arg("-frames:v")
             .arg(frame_count.to_string());
-        
+
         // Add format-specific options
         match self.config.format {
             VideoFormat::Mp4 => {
@@ -169,10 +172,11 @@ impl VideoGenerator {
             VideoFormat::Gif => {
                 // For GIF, we need a two-pass approach for better quality
                 let palette_path = frames_dir.join("palette.png");
-                
+
                 // First pass - generate palette
                 let mut palette_cmd = Command::new("ffmpeg");
-                palette_cmd.arg("-y")
+                palette_cmd
+                    .arg("-y")
                     .arg("-framerate")
                     .arg(self.config.fps.to_string())
                     .arg("-i")
@@ -180,13 +184,16 @@ impl VideoGenerator {
                     .arg("-vf")
                     .arg("fps=15,scale=640:-1:flags=lanczos,palettegen=reserve_transparent=0")
                     .arg(&palette_path);
-                
+
                 let palette_output = palette_cmd.output()?;
                 if !palette_output.status.success() {
-                    return Err(format!("FFmpeg palette generation failed: {}", 
-                        String::from_utf8_lossy(&palette_output.stderr)).into());
+                    return Err(format!(
+                        "FFmpeg palette generation failed: {}",
+                        String::from_utf8_lossy(&palette_output.stderr)
+                    )
+                    .into());
                 }
-                
+
                 // Second pass - create GIF with palette
                 cmd = Command::new("ffmpeg");
                 cmd.arg("-y")
@@ -212,18 +219,18 @@ impl VideoGenerator {
                     .arg(self.config.format.pixel_format());
             }
         }
-        
+
         cmd.arg(output_path);
-        
+
         println!("Running FFmpeg...");
-        
+
         let output = cmd.output()?;
-        
+
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(format!("FFmpeg encoding failed: {}", stderr).into());
         }
-        
+
         Ok(())
     }
 
@@ -237,7 +244,7 @@ impl VideoGenerator {
         } else {
             animation_data.frames.len()
         };
-        
+
         let estimated_mb = match self.config.format {
             VideoFormat::Mp4 => {
                 // Rough estimate: 1-5 MB per minute depending on quality
@@ -264,7 +271,7 @@ impl VideoGenerator {
                 (duration / 60.0) * bitrate_factor
             }
         };
-        
+
         Ok(format!(
             "Estimated size: {:.1} MB ({} frames, {:.1}s duration)",
             estimated_mb, frame_count, duration
@@ -286,10 +293,22 @@ mod tests {
 
     #[test]
     fn test_video_format_detection() {
-        assert!(matches!(VideoFormat::from_extension("mp4"), Some(VideoFormat::Mp4)));
-        assert!(matches!(VideoFormat::from_extension("MP4"), Some(VideoFormat::Mp4)));
-        assert!(matches!(VideoFormat::from_extension("gif"), Some(VideoFormat::Gif)));
-        assert!(matches!(VideoFormat::from_extension("webm"), Some(VideoFormat::Webm)));
+        assert!(matches!(
+            VideoFormat::from_extension("mp4"),
+            Some(VideoFormat::Mp4)
+        ));
+        assert!(matches!(
+            VideoFormat::from_extension("MP4"),
+            Some(VideoFormat::Mp4)
+        ));
+        assert!(matches!(
+            VideoFormat::from_extension("gif"),
+            Some(VideoFormat::Gif)
+        ));
+        assert!(matches!(
+            VideoFormat::from_extension("webm"),
+            Some(VideoFormat::Webm)
+        ));
         assert!(VideoFormat::from_extension("xyz").is_none());
     }
 

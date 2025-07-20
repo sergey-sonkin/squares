@@ -173,7 +173,10 @@ impl GeneticSolver {
         self
     }
 
-    pub fn save_animation_data<P: AsRef<std::path::Path>>(&self, path: P) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn save_animation_data<P: AsRef<std::path::Path>>(
+        &self,
+        path: P,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         if let Some(ref recorder) = self.animation_recorder {
             recorder.save_to_file(path)?;
             println!("Animation data saved");
@@ -202,7 +205,7 @@ impl GeneticSolver {
         let initial_container = best_individual.container_size;
         let initial_squares = best_individual.squares.clone();
         let initial_diversity = self.calculate_diversity();
-        
+
         if let Some(ref mut recorder) = self.animation_recorder {
             let state = AlgorithmState::GeneticAlgorithm {
                 generation: 0,
@@ -238,7 +241,7 @@ impl GeneticSolver {
             } else {
                 false
             };
-            
+
             self.best_fitness_history.push(best_fitness);
             self.diversity_history.push(diversity);
 
@@ -252,7 +255,7 @@ impl GeneticSolver {
                     mutation_rate: self.mutation_rate,
                 };
 
-                let should_record = 
+                let should_record =
                     // Always record first few generations to show initial chaos
                     generation < 5 ||
                     // Always record improvements
@@ -261,11 +264,11 @@ impl GeneticSolver {
                     (generation > 0 && (diversity - self.diversity_history[self.diversity_history.len() - 2]).abs() > 0.1) ||
                     // Record periodically but less frequently as we progress
                     (generation < 50 && generation % 3 == 0) ||  // Every 3rd generation early on
-                    (generation >= 50 && generation < 100 && generation % 8 == 0) ||  // Every 8th generation mid-game
+                    ((50..100).contains(&generation) && generation % 8 == 0) ||  // Every 8th generation mid-game
                     (generation >= 100 && generation % 15 == 0) ||  // Every 15th generation late game
                     // Record major container size changes
-                    (generation > 0 && 
-                     recorder.data.frames.last().map_or(true, |last_frame| 
+                    (generation > 0 &&
+                     recorder.data.frames.last().map_or(true, |last_frame|
                          (last_frame.container_size - best_container).abs() > 0.05));
 
                 if should_record {
@@ -363,8 +366,12 @@ impl GeneticSolver {
         if individuals.is_empty() {
             return Err("Failed to generate any valid initial population".into());
         }
-        
-        println!("Generated {} individuals out of {} target", individuals.len(), self.population_size);
+
+        println!(
+            "Generated {} individuals out of {} target",
+            individuals.len(),
+            self.population_size
+        );
 
         self.population = individuals;
         self.population
@@ -539,10 +546,10 @@ impl GeneticSolver {
         // Adaptive mutation rate based on generation and diversity
         let diversity = self.calculate_diversity();
         let exploration_factor = ((200.0 - self.generation as f64) / 200.0).max(0.1).min(1.0);
-        
+
         // Start with high mutation rate, decrease over time
         let base_mutation_rate = 0.05 + 0.25 * exploration_factor; // 5% to 30%
-        
+
         // Adjust based on diversity
         if diversity < 0.1 {
             // Low diversity: increase mutation to explore more
@@ -660,10 +667,10 @@ impl GeneticSolver {
         let exploration_factor = ((max_generations - generation as f64) / max_generations)
             .max(0.1) // Never go below 10% exploration
             .min(1.0);
-        
+
         // Choose mutation type with different probabilities
         let mutation_choice = rng.gen::<f64>();
-        
+
         if mutation_choice < 0.4 {
             // Position mutation (40% chance) - adaptive magnitude
             if !individual.squares.is_empty() {
@@ -690,7 +697,7 @@ impl GeneticSolver {
 
                 // Early generations: dramatic rotations, later: fine adjustments
                 let dramatic_rotation_chance = 0.1 + 0.6 * exploration_factor; // 10-70% chance
-                
+
                 if rng.gen::<f64>() < dramatic_rotation_chance {
                     // Complete rotation change (more likely early on)
                     square.angle = rng.gen::<f64>() * PI / 2.0;
@@ -703,7 +710,8 @@ impl GeneticSolver {
             }
         } else if mutation_choice < 0.85 {
             // Swap mutation (15% chance) - more likely early on
-            if individual.squares.len() >= 2 && rng.gen::<f64>() < (0.5 + 0.5 * exploration_factor) {
+            if individual.squares.len() >= 2 && rng.gen::<f64>() < (0.5 + 0.5 * exploration_factor)
+            {
                 let idx1 = rng.gen_range(0..individual.squares.len());
                 let idx2 = rng.gen_range(0..individual.squares.len());
 
@@ -713,11 +721,11 @@ impl GeneticSolver {
                         // Swap everything
                         let square1 = individual.squares[idx1];
                         let square2 = individual.squares[idx2];
-                        
+
                         individual.squares[idx1].x = square2.x;
                         individual.squares[idx1].y = square2.y;
                         individual.squares[idx1].angle = square2.angle;
-                        
+
                         individual.squares[idx2].x = square1.x;
                         individual.squares[idx2].y = square1.y;
                         individual.squares[idx2].angle = square1.angle;

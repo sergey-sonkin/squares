@@ -82,7 +82,14 @@ impl SquarePackingSolver {
                 energy: initial_energy,
                 acceptance_rate: 0.0,
             };
-            recorder.record_frame(0, &current_solution, container_size, state, false, Some("Initial solution".to_string()));
+            recorder.record_frame(
+                0,
+                &current_solution,
+                container_size,
+                state,
+                false,
+                Some("Initial solution".to_string()),
+            );
         }
 
         // Simulated annealing
@@ -472,7 +479,10 @@ impl SquarePackingSolver {
         }
     }
 
-    pub fn save_animation_data<P: AsRef<std::path::Path>>(&self, path: P) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn save_animation_data<P: AsRef<std::path::Path>>(
+        &self,
+        path: P,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         if let Some(ref recorder) = self.animation_recorder {
             recorder.save_to_file(path)?;
             println!("Animation data saved");
